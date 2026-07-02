@@ -20,6 +20,43 @@ An in-system ABAP analyzer BFS-walks the call graph from the transaction entry p
 Dynamic/BAdI edges are resolved best-effort (and tagged provisional); anything unresolved is reported as a **frontier** blind spot.
 This report depends only on standard, always-present SAP infrastructure/coding and has no dependencies on customer or other Z-code.
 
+## How it works — and how that differs from SUIM
+
+```mermaid
+flowchart TB
+  subgraph THIS["This tool — deep, code-level reachability"]
+    direction TB
+    T["Transaction code"] --> E["Entry resolver<br/>TSTC → program + includes"]
+    E --> B{"BFS over the<br/>reachable call graph"}
+    B -->|"WBCROSSGT method calls<br/>CROSS function-module calls"| R["Resolve targets → method/FM includes<br/>(interface dispatch via SEOMETAREL)"]
+    R --> B
+    B --> D["Detector: SCAN each reached unit"]
+    D --> C1["AUTHORITY-CHECK statements<br/>ID/FIELD resolved (e.g. ACTVT=03)"]
+    D --> C2["Auth function modules<br/>object arg resolved (e.g. E_INSTLN)"]
+    D --> C3["Class-based checks"]
+    C1 --> INV["Complete inventory<br/>+ Graphviz DOT / kroki.io"]
+    C2 --> INV
+    C3 --> INV
+    B -. "unresolved dynamic / BAdI" .-> F["Frontier<br/>(documented blind spots)"]
+  end
+
+  subgraph SUIM["SUIM / SU24 — transaction-start level only"]
+    direction TB
+    T2["Transaction code"] --> S1["Start authorization: S_TCODE"]
+    T2 --> S2["SU24 / USOBT<br/>maintained check-indicator proposals"]
+    S1 --> OUT["Authorizations to *start* the txn<br/>NOT the checks nested in the code"]
+    S2 --> OUT
+  end
+```
+
+## Compared to SUIM
+
+SUIM (and the underlying SU24 / USOBT check indicators) answer *"which authorizations guard **starting** this transaction"* — essentially `S_TCODE` plus the maintained check-indicator proposals.
+They do **not** follow the transaction's call graph into the code.
+So an `AUTHORITY-CHECK` buried in a private method several calls deep — e.g. `ISU_AUTHORITY_CHECK` on `E_INSTLN`, reached from `/UCOM/CUSTOMER` via a factory, an interface and a private method — is invisible to SUIM.
+
+This tool is complementary: it statically walks the reachable code and reports the *actual* checks in it — the authorization object, the `ID`/`FIELD` values, and the call path that reaches them — including checks SU24 never captured.
+
 ## Development coordinates
 
 Where this lives while it is being built (in-system first; abapGit later).
@@ -33,4 +70,6 @@ Where this lives while it is being built (in-system first; abapGit later).
 
 ## Status
 
-Early build. Foundation created (package, transport, message class); implementation follows the plan in `docs/superpowers/plans/`.
+Working. All components implemented (entry resolver, cross-reference edge provider, include resolver, dynamic/BAdI expander, reachability engine, detector, DOT exporter, ALV report).
+ABAP Unit: engine unit tests + end-to-end acceptance tests green — the tool recovers `E_INSTLN` from `/UCOM/CUSTOMER` and `B_EMMA_CAS` from `EMMACL` (verified in SAP GUI too).
+abaplint CI runs clean. Plan and design under `docs/superpowers/`.
