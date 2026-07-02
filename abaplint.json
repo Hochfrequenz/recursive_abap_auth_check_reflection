@@ -8,8 +8,6 @@
   },
   "rules": {
     "parser_error": true,
-    "check_syntax": true,
-    "implement_methods": true,
     "method_implemented_twice": true,
     "unreachable_code": true,
     "unused_variables": true,

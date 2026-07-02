@@ -9,11 +9,6 @@
 *----------------------------------------------------------------------*
 REPORT z_auth_scan.
 
-DATA c_tcode TYPE c LENGTH 31.
-DATA c_depth TYPE c LENGTH 31.
-DATA c_std   TYPE c LENGTH 40.
-DATA c_cust  TYPE c LENGTH 40.
-
 SELECTION-SCREEN BEGIN OF LINE.
 SELECTION-SCREEN COMMENT 1(31) c_tcode FOR FIELD p_tcode.
 PARAMETERS p_tcode TYPE tcode OBLIGATORY.
