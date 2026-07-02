@@ -9,10 +9,36 @@
 *----------------------------------------------------------------------*
 REPORT z_auth_scan.
 
+DATA c_tcode TYPE c LENGTH 31.
+DATA c_depth TYPE c LENGTH 31.
+DATA c_std   TYPE c LENGTH 40.
+DATA c_cust  TYPE c LENGTH 40.
+
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) c_tcode FOR FIELD p_tcode.
 PARAMETERS p_tcode TYPE tcode OBLIGATORY.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) c_depth FOR FIELD p_depth.
 PARAMETERS p_depth TYPE i DEFAULT 100.
-PARAMETERS p_std   RADIOBUTTON GROUP scp DEFAULT 'X'.  " descend into SAP standard
-PARAMETERS p_cust  RADIOBUTTON GROUP scp.              " stop at the custom boundary
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_std RADIOBUTTON GROUP scp DEFAULT 'X'.
+SELECTION-SCREEN COMMENT 3(40) c_std FOR FIELD p_std.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_cust RADIOBUTTON GROUP scp.
+SELECTION-SCREEN COMMENT 3(40) c_cust FOR FIELD p_cust.
+SELECTION-SCREEN END OF LINE.
+
+INITIALIZATION.
+  c_tcode = 'Transaction code'.
+  c_depth = 'Max. recursion depth'.
+  c_std   = 'Descend into SAP standard'.
+  c_cust  = 'Custom code only'.
 
 CLASS lcl_app DEFINITION CREATE PUBLIC.
   PUBLIC SECTION.
