@@ -75,6 +75,28 @@ Decision: **A** — an in-system ABAP analyzer. It scales into standard code
 is the more shippable model. B is retained conceptually only as a possible
 alternate edge-provider for edge cases.
 
+**End-to-end validation (manual, live).** The full concept was walked by hand on
+`/UCOM/CUSTOMER`: entry report `/UCOM/RP_MAINTAIN_CUSTOMER` (no check) →
+`/UCOM/CL_CUSTOMER_FACTORY=>GET_CUSTOMER_ACCESS` → `/UCOM/CL_CUSTOMER_ACCESS`
+(reached behind interface `/UCOM/IF_CUSTOMER_ACCESS`) → private method
+`CHECK_AUTHORIZATION` → `CALL FUNCTION 'ISU_AUTHORITY_CHECK' x_object = 'E_INSTLN'`.
+This confirmed: (a) the real guard sits several hops below the transaction in a
+private method, invisible from the entry point; (b) it is a call edge that falls
+out of the graph; (c) the object literal is statically recoverable; and (d) it
+motivated the FM-argument extraction and interface-dispatch refinements above.
+
+**Second validated example (SAP-standard):** `EMMACL` → report `REMMACASELIST`
+contains classic `AUTHORITY-CHECK` statements in **both** operand forms:
+- literal object — `AUTHORITY-CHECK OBJECT 'B_EMMA_CAS' ID 'ACTVT' FIELD … ID 'BRGRU' DUMMY` (lines 45, 841, 849);
+- **constant reference** — `AUTHORITY-CHECK OBJECT cl_emma_case=>co_auth_object …`
+  (lines 72–140, 436, 733), where `CL_EMMA_CASE=>CO_AUTH_OBJECT TYPE XUOBJECT VALUE 'B_EMMA_CAS'`.
+
+It also dispatches through `BADI_EMMA_CASE`/`IF_BADI_EMMA_CASE`. This example
+exercises what `/UCOM/CUSTOMER` did not: the classic **statement** detection
+(type S), **constant resolution** of the object operand (a `class=>const`
+reference, not a literal), and the **BAdI expander**. Both examples become
+integration/acceptance fixtures in the plan.
+
 ## Architecture
 
 **One algorithm, pluggable edge-provider.** A reachability engine performs a
@@ -129,6 +151,23 @@ The three types split by detection mechanism:
   system), extracting the statement, its `OBJECT`, `ID`/`FIELD` operands, and line
   number.
 
+**Extracting the authorization object from FM/class checks.** Recording "an auth
+FM was called" is not enough — the inventory needs the actual authorization
+object. For each known auth API the registry stores **which argument carries the
+object**, and the detector reads that argument at the call site (from the
+cross-reference / a light source read). Example: `ISU_AUTHORITY_CHECK` → `X_OBJECT`,
+`AUTHORITY_CHECK` → `OBJECT`. When the argument is a literal or a constant
+(the common case, e.g. `lc_object_e_instln VALUE 'E_INSTLN'`), the object is
+recovered statically; when it is a runtime variable, the object is reported as
+*undetermined* for that call.
+
+**Prefix matching is insufficient — the registry is essential.** Real checks are
+frequently domain wrappers whose names do not match `AUTHORITY_CHECK*` (validated
+live: `/UCOM/CUSTOMER` guards via `ISU_AUTHORITY_CHECK` on object `E_INSTLN`). The
+shipped registry must therefore include known wrappers (`ISU_AUTHORITY_CHECK`,
+`AUTHORITY_CHECK`, `AUTHORITY_CHECK_TCODE`, `VIEW_AUTHORITY_CHECK`,
+`CL_ABAP_AUTHORITY_CHECK`, …) and remain customer-extensible.
+
 The known-auth-API registry ships pre-filled with SAP-standard entries and is
 **customer-extensible**, so shops that wrap `AUTHORITY-CHECK` in a Z-helper class
 or FM can register it and have it detected as a check.
@@ -142,15 +181,27 @@ check type · authorization object (+ ID/FIELD when statically literal)`.
 **Frontier report (separate):** unresolved dynamic/BAdI edges with their call
 site, so a human knows exactly where the static picture has blind spots.
 
+**Call-graph export (Graphviz DOT).** Because the engine already materialises the
+graph (nodes = reached includes, edges = resolved calls), it retains them in the
+result and can emit the whole graph as a **Graphviz `.dot` file** for a given
+transaction. Nodes carry include/unit labels and are styled by kind (custom vs
+standard, provisional, frontier); nodes that contain a check are highlighted.
+This is a first-class output, not an afterthought — the graph is built anyway.
+
 **Delivery / UI:**
 - Executable report with a selection screen (transaction, depth cap, scope toggle),
-  ALV output for both the inventory and the frontier list.
-- A callable **API class** exposing the same results, so the analysis can be
-  scripted, fed to ATC, or integrated into CI.
+  ALV output for both the inventory and the frontier list, plus a "download DOT"
+  option.
+- A callable **API class** exposing the same results (inventory, frontier, and the
+  graph/DOT), so the analysis can be scripted, fed to ATC, or integrated into CI.
 
 ## Packaging for portability
 
-- One dedicated package under a registered namespace.
+- **One single, self-contained ABAP package** (`ZAUTH_SCAN`) holds **every** object —
+  classes, interfaces, exception, DDIC registry table, message class, **and the
+  ABAP Unit test includes**. No object lives outside it and it creates no
+  dependencies on other custom packages. This is a hard requirement for clean
+  abapGit tracking: the package maps 1:1 to the git repository.
 - **Distribution phasing:** develop and validate the tool *in-system* first
   (build directly in the package, iterate against real transactions until the
   reachability and detection are trusted). Only once proven, connect the package
@@ -176,11 +227,19 @@ site, so a human knows exactly where the static picture has blind spots.
 2. **Edge provider (interface + index impl)** — include → outgoing edges. Depends
    on `WBCROSSGT`/`CROSS`.
 3. **Object→include resolver** — method/FM/form → implementing include. Depends on
-   SEO services / `TFDIR`.
+   SEO services / `TFDIR`. Must handle **interface-dispatch hops**: a call to an
+   interface method (e.g. `/UCOM/IF_CUSTOMER_ACCESS~RELOAD_CUSTOMER`) resolves to
+   the implementing class method(s) — the concrete class is often produced by a
+   factory, so map interface method → implementing class(es) via SEO relations
+   (`SEOMETAREL`) and enqueue each.
 4. **Dynamic/BAdI expander** — dynamic & BAdI edges → candidates + frontier nodes.
    Depends on enhancement registry.
-5. **Reachability engine** — BFS orchestration, visited set, guards. Depends on 1–4.
-6. **Check detector** — auth-API registry match + `SCAN ABAP-SOURCE` statement
-   detection. Depends on the registry table.
+5. **Reachability engine** — BFS orchestration, visited set, guards. **Retains the
+   graph** (nodes + resolved edges) in the result so it can be exported. Depends on 1–4.
+6. **Check detector** — auth-API registry match + FM-argument object extraction +
+   `SCAN ABAP-SOURCE` statement detection, including **constant resolution** of the
+   object operand (`class=>const`, e.g. `cl_emma_case=>co_auth_object` → `B_EMMA_CAS`).
+   Depends on the registry table.
 7. **Inventory + frontier reporter** — record assembly, ALV, API class.
-8. **Auth-API registry (content)** — shipped table, customer-extensible.
+8. **DOT/graph exporter** — renders the retained graph as a Graphviz `.dot` file.
+9. **Auth-API registry (content)** — shipped table, customer-extensible.
