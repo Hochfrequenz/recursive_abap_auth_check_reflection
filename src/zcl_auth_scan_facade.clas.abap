@@ -29,13 +29,24 @@ ENDCLASS.
 CLASS zcl_auth_scan_facade IMPLEMENTATION.
 
   METHOD create.
+    DATA entry         TYPE REF TO zif_auth_scan_entry.
+    DATA edge_provider TYPE REF TO zif_auth_scan_edge_provider.
+    DATA resolver      TYPE REF TO zif_auth_scan_incl_resolver.
+    DATA expander      TYPE REF TO zif_auth_scan_expander.
+    DATA detector      TYPE REF TO zif_auth_scan_detector.
+
+    entry         = NEW zcl_auth_scan_entry_resolver( ).
+    edge_provider = NEW zcl_auth_scan_xref_edges( ).
+    resolver      = NEW zcl_auth_scan_incl_resolver( ).
+    expander      = NEW zcl_auth_scan_expander( ).
+    detector      = NEW zcl_auth_scan_detector( ).
+
     facade = NEW #( ).
-    facade->engine = NEW zcl_auth_scan_engine(
-      entry         = NEW zcl_auth_scan_entry_resolver( )
-      edge_provider = NEW zcl_auth_scan_xref_edges( )
-      resolver      = NEW zcl_auth_scan_incl_resolver( )
-      expander      = NEW zcl_auth_scan_expander( )
-      detector      = NEW zcl_auth_scan_detector( ) ).
+    facade->engine = NEW zcl_auth_scan_engine( entry         = entry
+                                               edge_provider = edge_provider
+                                               resolver      = resolver
+                                               expander      = expander
+                                               detector      = detector ).
   ENDMETHOD.
 
   METHOD run.
