@@ -102,16 +102,20 @@ CLASS zcl_auth_scan_dot IMPLEMENTATION.
     " kroki expects: base64url( zlib-deflate( source ) )
     DATA(raw) = cl_abap_codepage=>convert_to( dot ).
 
-    DATA compressed TYPE xstring.
-    cl_abap_gzip=>compress_binary( EXPORTING raw_in  = raw
-                                   IMPORTING raw_out = compressed ).
+    " cl_abap_gzip yields a GZIP stream (10-byte header + DEFLATE + 8-byte
+    " trailer). kroki needs a zlib stream, so strip the gzip framing to get the
+    " bare DEFLATE body, then wrap it as zlib: 0x789C + DEFLATE + adler32(source).
+    DATA gzip TYPE xstring.
+    cl_abap_gzip=>compress_binary( EXPORTING raw_in   = raw
+                                   IMPORTING gzip_out = gzip ).
+    DATA(deflate_length) = xstrlen( gzip ) - 18.
+    DATA(deflate) = gzip+10(deflate_length).
 
-    " wrap raw DEFLATE as a zlib stream: header 0x789C + data + adler32(source)
     DATA zlib_header TYPE x LENGTH 2 VALUE '789C'.
     DATA(header)   = CONV xstring( zlib_header ).
     DATA(checksum) = adler32( raw ).
     DATA zlib TYPE xstring.
-    CONCATENATE header compressed checksum INTO zlib IN BYTE MODE.
+    CONCATENATE header deflate checksum INTO zlib IN BYTE MODE.
 
     DATA(encoded) = cl_http_utility=>encode_x_base64( zlib ).
     REPLACE ALL OCCURRENCES OF `+` IN encoded WITH `-`.
