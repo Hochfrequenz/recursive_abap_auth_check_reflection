@@ -28,7 +28,7 @@ authorization check in it. See the design spec for the full architecture.
 - **Do not hand-write abapGit XML.** Create objects via `create_object`; let SAP
   serialize. Pull back into git via abapGit for review.
 - **File naming:** all lowercase for abapGit files (`zcl_auth_scan_engine.clas.abap`).
-- **Clean ABAP** style — see project notes below.
+- **Modern Clean ABAP** (non-negotiable): code we can be proud of, not 30-year-old style. Inline `DATA(...)`, `VALUE #( )`, `NEW #( )`, `CORRESPONDING #( )`, `COND`/`SWITCH`, string templates, functional method calls; class-based exceptions via `RAISING` (not `sy-subrc`); small focused methods; ABAP Doc. No obsolete forms. Reviewed by fresh independent review agents at each small step.
 - **Never commit secrets** — `.mcp.json`, `opencode.json`, `systems.json`, PATs are gitignored.
 - **Respect the transport system** — every change lands in the project TR; **never
   release the transport without explicit human permission.**
