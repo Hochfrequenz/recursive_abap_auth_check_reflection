@@ -402,7 +402,7 @@ Logic:
 - Class method → include via `cl_oo_classname_service=>get_method_include( )`.
 - **Interface method** (target object is an interface, e.g. `/UCOM/IF_CUSTOMER_ACCESS`) → find implementing classes via `SEOMETAREL` (`refclsname = interface`, `reltype` = implementation) → for each, resolve the method include; return all. Set `ev_unresolved` only if none found.
 - FM → function group via `TFDIR-PNAME`/`FUNCNAME`, then the FM include (`L<fgrp>Uxx` / `RS_FUNCTIONMODULE_INSDER`-style mapping via `TFDIR`+`ENLFDIR`).
-- Form (`PERFORM`) → the include is the edge source or a `CROSS`-referenced program; return that program.
+- Form (`PERFORM`) → the include is the edge source or a `CROSS`-referenced program; return that program. **Confirm `CROSS` field names via `run_query` first** (same caveat as Task 5 — the `CROSS` schema was not probed verbatim).
 
 - [ ] **Step 1: Failing integration test — class method include**
 
@@ -470,7 +470,7 @@ Build an edge to `ISU_AUTHORITY_CHECK` with `source_include = /UCOM/CL_CUSTOMER_
 
 Logic:
 - BAdI edge (classic: `CL_EXITHANDLER=>GET_INSTANCE`/`GET_INSTANCE_FOR_SUBSCREENS`; new: `GET BADI`/`CALL BADI`) → look up active implementations (classic: `SXC_EXIT`/`SXS_ATTR`/`V_EXT_IMP`; new BAdI: enhancement spot registry) → return implementing class method includes as **provisional** candidates.
-- Dynamic `CALL FUNCTION lv_x` / `CALL METHOD ...->(lv_m)` → best-effort: if a naming pattern is discernible, return candidates; otherwise `ev_has_frontier = X` with reason.
+- Dynamic `CALL FUNCTION lv_x` / `CALL METHOD ...->(lv_m)` → best-effort: if a naming pattern is discernible, return candidates; otherwise `ev_has_frontier = X` with reason. **Heuristic candidate generation is intentionally minimal for MVP** — the honest default is to emit a frontier node; positive heuristic resolution is a later enhancement, not required for acceptance.
 
 - [ ] **Step 1: Failing test — unresolvable dynamic call yields frontier only** (unit, no candidates).
 - [ ] **Step 2: Implement. PASS.**
@@ -485,6 +485,8 @@ Logic:
 **Files:** `ZCL_AUTH_SCAN_FACADE` + integration test.
 
 Logic: static `create( )` news up the concrete collaborators and injects them into `ZCL_AUTH_SCAN_ENGINE`. Public `run( iv_tcode, iv_max_depth = 100, iv_scope = into_standard )` delegates to the engine and returns `ty_result`. Convenience `to_dot( is_result )` delegates to `ZCL_AUTH_SCAN_DOT` (Task 10b) and returns the DOT string.
+
+> **Build order:** `to_dot( )` references `ZCL_AUTH_SCAN_DOT` (Task 10b). Build Task 10b **before** activating the facade (10b only depends on Task 3), or stub `to_dot( )` to `RETURN ''` until 10b exists — otherwise activation fails a syntax check.
 
 > **This facade IS the shipped "callable API class"** the spec calls for — the report (Task 11) and any external/ATC/CI caller both go through `ZCL_AUTH_SCAN_FACADE=>create( )->run( )` (and `->to_dot( )`). There is no separate API object.
 
