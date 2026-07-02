@@ -18,12 +18,13 @@ CLASS zcl_auth_scan_entry_resolver IMPLEMENTATION.
       RAISE EXCEPTION TYPE zcx_auth_scan MESSAGE e002(zauth_scan) WITH transaction.
     ENDIF.
 
-    includes = VALUE #( ( CONV progname( program ) ) ).
+    includes = VALUE #( ( program ) ).
 
     " the program's own authored includes (report INCLUDEs), not pulled-in pools
+    DATA(pattern) = |{ program }%|.
     SELECT include FROM d010inc
       WHERE master  = @program
-        AND include LIKE @( |{ program }%| )
+        AND include LIKE @pattern
       INTO TABLE @DATA(sub_includes).
     LOOP AT sub_includes INTO DATA(sub).
       IF NOT line_exists( includes[ table_line = sub-include ] ).
