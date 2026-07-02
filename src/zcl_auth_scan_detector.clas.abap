@@ -74,20 +74,45 @@ CLASS zcl_auth_scan_detector IMPLEMENTATION.
       DATA(keyword) = to_upper( tokens[ statement-from ]-str ).
 
       IF keyword = 'AUTHORITY-CHECK'.
-        DATA(index) = statement-from.
-        WHILE index < statement-to.
-          IF to_upper( tokens[ index ]-str ) = 'OBJECT'.
-            DATA(object) = resolve_token( token = tokens[ index + 1 ] constants = constants ).
-            APPEND VALUE #( type         = zif_auth_scan_types=>check_types-statement
-                            object       = object-value
-                            object_known = object-known
-                            details      = 'AUTHORITY-CHECK'
-                            include      = include
-                            line         = tokens[ statement-from ]-row ) TO checks.
-            EXIT.
+        DATA authorization_object TYPE resolved.
+        DATA detail_parts         TYPE string_table.
+        CLEAR: authorization_object, detail_parts.
+        DATA(cursor) = statement-from + 1.
+        WHILE cursor <= statement-to.
+          DATA(word) = to_upper( tokens[ cursor ]-str ).
+          IF word = 'OBJECT' AND cursor < statement-to.
+            authorization_object = resolve_token( token = tokens[ cursor + 1 ] constants = constants ).
+            cursor = cursor + 2.
+            CONTINUE.
+          ELSEIF word = 'ID' AND cursor < statement-to.
+            DATA(id_token) = resolve_token( token = tokens[ cursor + 1 ] constants = constants ).
+            DATA(id_name)  = COND string( WHEN id_token-known = abap_true
+                                          THEN id_token-value
+                                          ELSE to_upper( CONV string( tokens[ cursor + 1 ]-str ) ) ).
+            cursor = cursor + 2.
+            DATA(field_text) = `?`.
+            IF cursor <= statement-to.
+              DATA(following) = to_upper( tokens[ cursor ]-str ).
+              IF following = 'FIELD' AND cursor < statement-to.
+                DATA(field_value) = resolve_token( token = tokens[ cursor + 1 ] constants = constants ).
+                field_text = COND #( WHEN field_value-known = abap_true THEN field_value-value ELSE `?` ).
+                cursor = cursor + 2.
+              ELSEIF following = 'DUMMY'.
+                field_text = `<DUMMY>`.
+                cursor = cursor + 1.
+              ENDIF.
+            ENDIF.
+            APPEND |{ id_name }={ field_text }| TO detail_parts.
+            CONTINUE.
           ENDIF.
-          index = index + 1.
+          cursor = cursor + 1.
         ENDWHILE.
+        APPEND VALUE #( type         = zif_auth_scan_types=>check_types-statement
+                        object       = authorization_object-value
+                        object_known = authorization_object-known
+                        details      = concat_lines_of( table = detail_parts sep = `, ` )
+                        include      = include
+                        line         = tokens[ statement-from ]-row ) TO checks.
 
       ELSEIF keyword = 'CALL'
          AND statement-from + 2 <= statement-to
