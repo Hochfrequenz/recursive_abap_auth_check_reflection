@@ -61,12 +61,17 @@ CLASS zcl_auth_scan_incl_resolver IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD method_include.
-    TRY.
-        result = cl_oo_classname_service=>get_method_include(
-          VALUE seocpdkey( clsname = class cpdname = cpdname ) ).
-      CATCH cx_root.
-        CLEAR result.
-    ENDTRY.
+    " get_method_include raises CLASSIC exceptions (not class-based), so it must
+    " be called with an EXCEPTIONS clause rather than TRY/CATCH.
+    CALL METHOD cl_oo_classname_service=>get_method_include
+      EXPORTING mtdkey              = VALUE seocpdkey( clsname = class cpdname = cpdname )
+      RECEIVING result              = result
+      EXCEPTIONS class_not_existing  = 1
+                 method_not_existing = 2
+                 OTHERS              = 3.
+    IF sy-subrc <> 0.
+      CLEAR result.
+    ENDIF.
   ENDMETHOD.
 
 ENDCLASS.
