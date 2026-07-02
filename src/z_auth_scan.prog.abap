@@ -77,7 +77,8 @@ CLASS lcl_app IMPLEMENTATION.
           |Authorization checks reachable from { p_tcode }| ).
         alv->display( ).
 
-      CATCH cx_salv_msg cx_salv_not_found cx_salv_existing cx_salv_data_error INTO DATA(salv_error).
+      CATCH cx_salv_msg cx_salv_not_found cx_salv_existing cx_salv_data_error
+            cx_salv_wrong_call INTO DATA(salv_error).
         MESSAGE salv_error->get_text( ) TYPE 'E'.
     ENDTRY.
   ENDMETHOD.
@@ -112,8 +113,9 @@ CLASS lcl_app IMPLEMENTATION.
              short TYPE scrtext_s,
              med   TYPE scrtext_m,
              long  TYPE scrtext_l,
-           END OF header.
-    DATA(headers) = VALUE STANDARD TABLE OF header WITH EMPTY KEY(
+           END OF header,
+           header_tab TYPE STANDARD TABLE OF header WITH EMPTY KEY.
+    DATA(headers) = VALUE header_tab(
       ( field = 'TYPE'           short = 'Type'    med = 'Check type'   long = 'Check type (S/K/F)' )
       ( field = 'OBJECT'         short = 'Object'  med = 'Auth. object' long = 'Authorization object' )
       ( field = 'OBJECT_KNOWN'   short = 'Known'   med = 'Object known' long = 'Object statically known' )
