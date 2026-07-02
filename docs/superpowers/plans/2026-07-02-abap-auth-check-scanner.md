@@ -16,7 +16,9 @@
 - **Transport:** all objects go into the single project TR created in Task 0. Never release it without explicit human permission.
 - **"Commit" step meaning:** because git source commit is deferred to the abapGit roundtrip (Task 12), each task's definition of done is **activated + green ABAP Unit + clean ATC**. The git repo receives per-task progress only as plan checkbox updates until Task 12.
 - **Naming:** classes `ZCL_AUTH_SCAN_*`, interfaces `ZIF_AUTH_SCAN_*`, exception `ZCX_AUTH_SCAN`, DDIC/message class `ZAUTH_SCAN_*`, report `Z_AUTH_SCAN`. abapGit filenames all-lowercase.
-- **Test design:** pure-logic classes (engine, detector-parsing) are unit-tested with injected fakes. DB/repository-touching classes (entry resolver, edge provider, include resolver) are integration-tested against the **stable known objects** from the live probe (values below are real and asserted verbatim).
+- **ONE self-contained package (hard requirement):** every object — including the DDIC registry table, message class, and **all ABAP Unit test includes** — lives in package `ZAUTH_SCAN`. No object outside it; no dependency on other custom packages. The package maps 1:1 to this git repo for clean abapGit tracking.
+- **Tests ship with the code:** ABAP Unit tests are written as the classes' **test includes** (serialized by abapGit as `*.clas.testclasses.abap`), so they travel with the package to every customer system — not stripped, not local-only.
+- **Test design:** pure-logic classes (engine, detector-parsing, DOT exporter) are unit-tested with injected fakes. DB/repository-touching classes (entry resolver, edge provider, include resolver) are integration-tested against the **stable known objects** from the live probes (values below are real and asserted verbatim). Two live-validated fixtures: `/UCOM/CUSTOMER` (auth FM `ISU_AUTHORITY_CHECK` → `E_INSTLN`) and `EMMACL`/`REMMACASELIST` (classic statement, literal + constant `cl_emma_case=>co_auth_object` → `B_EMMA_CAS`, plus `BADI_EMMA_CASE`).
 
 ---
 
@@ -39,8 +41,11 @@
 | `ZCL_AUTH_SCAN_EXPANDER` | CLAS | `src/zcl_auth_scan_expander.clas.abap` | `ZIF_AUTH_SCAN_EXPANDER` via BAdI registry + heuristics |
 | `ZAUTH_SCAN_API` | TABL | `src/zauth_scan_api.tabl.xml` | Registry of known auth APIs (+object-arg rule) |
 | `ZCL_AUTH_SCAN_DETECTOR` | CLAS | `src/zcl_auth_scan_detector.clas.abap` | `ZIF_AUTH_SCAN_DETECTOR` via registry + SCAN ABAP-SOURCE |
-| `ZCL_AUTH_SCAN_FACADE` | CLAS | `src/zcl_auth_scan_facade.clas.abap` | Wires impls; public `run()` API |
-| `Z_AUTH_SCAN` | PROG | `src/z_auth_scan.prog.abap` | Selection screen + ALV rendering |
+| `ZCL_AUTH_SCAN_DOT` | CLAS | `src/zcl_auth_scan_dot.clas.abap` | Renders the retained graph as a Graphviz `.dot` string |
+| `ZCL_AUTH_SCAN_FACADE` | CLAS | `src/zcl_auth_scan_facade.clas.abap` | Wires impls; public `run()` + `to_dot()` API |
+| `Z_AUTH_SCAN` | PROG | `src/z_auth_scan.prog.abap` | Selection screen + ALV rendering + DOT download |
+
+All objects above are created in the single package `ZAUTH_SCAN`; test includes are part of their owning class.
 
 ---
 
@@ -155,11 +160,23 @@ INTERFACE zif_auth_scan_types PUBLIC.
     END OF ty_frontier,
     ty_frontiers TYPE STANDARD TABLE OF ty_frontier WITH EMPTY KEY,
 
+    "! a resolved graph edge (for DOT export)
+    BEGIN OF ty_graph_edge,
+      from_include TYPE progname,
+      to_include   TYPE progname,
+      kind         TYPE ty_edge_kind,
+      label        TYPE string,        " e.g. class=>method
+      is_provisional TYPE abap_bool,
+    END OF ty_graph_edge,
+    ty_graph_edges TYPE STANDARD TABLE OF ty_graph_edge WITH EMPTY KEY,
+
     BEGIN OF ty_result,
-      tcode      TYPE tcode,
-      checks     TYPE ty_checks,
-      frontier   TYPE ty_frontiers,
-      nodes_seen TYPE i,
+      tcode         TYPE tcode,
+      checks        TYPE ty_checks,
+      frontier      TYPE ty_frontiers,
+      nodes         TYPE ty_nodes,        " retained graph nodes (for DOT)
+      graph_edges   TYPE ty_graph_edges,  " retained graph edges (for DOT)
+      nodes_seen    TYPE i,
       max_depth_hit TYPE abap_bool,
     END OF ty_result.
 
@@ -273,7 +290,8 @@ The engine is pure orchestration and fully unit-testable with fake collaborators
    - kinds M/C/P/I → `incl_resolver->resolve`; if `ev_unresolved` → frontier.
    - kinds D/B → `expander->expand` → provisional candidate includes + optional frontier.
 8. For each resolved include: compute `is_standard`. **Classification rule:** an object is *custom* if its name starts with `Z`/`Y` **or** is in a registered customer/partner namespace (`/…/`, e.g. `/UCOM/`); everything else is *SAP-standard*. (Determine authoritatively from the object's package/software component via `TADIR`+`TDEVC` rather than name alone where possible; the name rule is the fallback.) Thus `/UCOM/*` counts as custom — so under `custom_only` the `/UCOM/CUSTOMER` chain is still fully walked, and the boundary frontier is recorded only when crossing into genuine SAP-standard packages. If `scope = custom_only` and target is standard → record boundary frontier, do not enqueue; else enqueue at `depth+1`, `is_provisional = node.is_provisional OR expander-provisional`, path = `node.path & ' → ' & target`.
-9. Return result with `nodes_seen = |visited|`.
+9. **Retain the graph:** append every visited node to `result-nodes` and every resolved edge to `result-graph_edges` (with `from_include`, `to_include`, kind, label = `object=>sub_name`, provisional flag). This is what the DOT exporter (Task 10b) consumes.
+10. Return result with `nodes_seen = |visited|`.
 
 - [ ] **Step 1: Write failing test — seed with no edges yields the seed's own statement check**
 
@@ -311,6 +329,8 @@ Fake detector `classify_edge` flags an edge to `ISU_AUTHORITY_CHECK` as a func c
 - [ ] **Step 9: Add failing tests — depth cap sets `max_depth_hit` + frontier; dynamic edge produces provisional node; `custom_only` scope stops at standard boundary with a frontier.**
 
 - [ ] **Step 10: Implement guards/scope/provisional propagation; run — PASS.**
+
+- [ ] **Step 10b: Add failing test — graph retention.** With fakes producing A→B→C, assert `result-nodes` has 3 entries and `result-graph_edges` has the A→B and B→C edges with correct labels. Implement retention; run — PASS.
 
 - [ ] **Step 11: Run ATC**
 
@@ -432,6 +452,10 @@ Feed a fixture source array (a constant in the test) containing `AUTHORITY-CHECK
 
 - [ ] **Step 2: Run — FAIL. Implement SCAN parser. Run — PASS.**
 
+- [ ] **Step 2b: Failing integration test — classic statement with literal AND constant object (EMMACL).**
+
+`scan_include( 'REMMACASELIST' )` must return statement checks including: one with `auth_object = 'B_EMMA_CAS'`, `object_known = X` from the **literal** `OBJECT 'B_EMMA_CAS'` (line 45); and one from the **constant** `OBJECT cl_emma_case=>co_auth_object` (line 72) that resolves to `auth_object = 'B_EMMA_CAS'`, `object_known = X`. This forces constant resolution of a `class=>const` operand (read `CL_EMMA_CASE`'s constant value via SEO / `get_class_definition`-equivalent). Assert both. Implement constant resolution; run — PASS.
+
 - [ ] **Step 3: Failing integration test — classify `ISU_AUTHORITY_CHECK`**
 
 Build an edge to `ISU_AUTHORITY_CHECK` with `source_include = /UCOM/CL_CUSTOMER_ACCESS`'s CHECK_AUTHORIZATION include. Assert: `ev_is_check = X`, type `F`, and `auth_object = 'E_INSTLN'` with `object_known = X` (constant `lc_object_e_instln VALUE 'E_INSTLN'` resolved). This is the live-validated case.
@@ -450,8 +474,8 @@ Logic:
 
 - [ ] **Step 1: Failing test — unresolvable dynamic call yields frontier only** (unit, no candidates).
 - [ ] **Step 2: Implement. PASS.**
-- [ ] **Step 3a: Discovery — pick a stable BAdI fixture.** Unlike the `/UCOM/` chain, no BAdI was live-probed. First discover a stable, active BAdI implementation to assert against (query the enhancement registry, e.g. classic `SXC_EXIT`/`V_EXT_IMP` or a new-BAdI enhancement spot with an active implementation). Record its name + expected implementing class as the test fixture. Do **not** treat any BAdI name as a known value until discovered.
-- [ ] **Step 3b: Failing integration test — the discovered BAdI resolves to ≥1 active implementation** (assert candidate returned + `is_provisional`/expander-provisional flag set).
+- [ ] **Step 3a: Confirm the BAdI fixture.** Use `BADI_EMMA_CASE` (classic BAdI; live-probed as called from `REMMACASELIST`, implemented by `CL_EMMA_CASE` via `IF_BADI_EMMA_CASE`). Before coding, confirm its active implementation(s) in the enhancement registry (classic `SXC_EXIT`/`SXS_ATTR`/`V_EXT_IMP`) so the assertion targets a real active impl in this system.
+- [ ] **Step 3b: Failing integration test — `BADI_EMMA_CASE` resolves to ≥1 active implementation** (expect `CL_EMMA_CASE`/`IF_BADI_EMMA_CASE~TRANSACTION_START`); assert candidate include returned + expander-provisional flag set.
 - [ ] **Step 4: Implement BAdI registry lookup. PASS.** ATC clean. DoD.
 
 ---
@@ -460,9 +484,9 @@ Logic:
 
 **Files:** `ZCL_AUTH_SCAN_FACADE` + integration test.
 
-Logic: static `create( )` news up the concrete collaborators and injects them into `ZCL_AUTH_SCAN_ENGINE`. Public `run( iv_tcode, iv_max_depth = 100, iv_scope = into_standard )` delegates to the engine and returns `ty_result`.
+Logic: static `create( )` news up the concrete collaborators and injects them into `ZCL_AUTH_SCAN_ENGINE`. Public `run( iv_tcode, iv_max_depth = 100, iv_scope = into_standard )` delegates to the engine and returns `ty_result`. Convenience `to_dot( is_result )` delegates to `ZCL_AUTH_SCAN_DOT` (Task 10b) and returns the DOT string.
 
-> **This facade IS the shipped "callable API class"** the spec calls for — the report (Task 11) and any external/ATC/CI caller both go through `ZCL_AUTH_SCAN_FACADE=>create( )->run( )`. There is no separate API object.
+> **This facade IS the shipped "callable API class"** the spec calls for — the report (Task 11) and any external/ATC/CI caller both go through `ZCL_AUTH_SCAN_FACADE=>create( )->run( )` (and `->to_dot( )`). There is no separate API object.
 
 - [ ] **Step 1: Failing end-to-end integration test — the live-validated case**
 
@@ -480,7 +504,48 @@ ENDMETHOD.
 
 This test is the plan's acceptance criterion: it proves the tool recovers, from the transaction alone, the authorization check we found by hand.
 
+- [ ] **Step 2b: Second end-to-end test — EMMACL (SAP-standard, classic statement).**
+
+```abap
+METHOD e2e_emmacl.
+  DATA(ls) = zcl_auth_scan_facade=>create( )->run( iv_tcode = 'EMMACL' ).
+  " classic AUTHORITY-CHECK on B_EMMA_CAS (literal + constant forms) must appear
+  cl_abap_unit_assert=>assert_true( xsdbool( line_exists( ls-checks[
+      check_type  = zif_auth_scan_types=>gc_check_type-statement
+      auth_object = 'B_EMMA_CAS' ] ) ) ).
+ENDMETHOD.
+```
+Assert PASS. This covers the classic-statement + constant-resolution path end-to-end on standard code, complementing the FM path from `/UCOM/CUSTOMER`.
+
 - [ ] **Step 3: Performance sanity** — run against `/UCOM/CUSTOMER` with `into_standard`; log `nodes_seen` and runtime. If runtime is excessive, confirm the visited set and standard-boundary handling behave. DoD: active + green.
+
+---
+
+## Task 10b: DOT / graph exporter — TDD, pure logic
+
+**Files:** `ZCL_AUTH_SCAN_DOT` (CLAS) + test include. Pure function of `ty_result` → DOT string; fully unit-testable, no DB.
+
+Logic: `to_dot( is_result ) RETURNING VALUE(rv_dot) TYPE string`. Emit `digraph g { … }`:
+- one node per `is_result-nodes` entry (id = sanitized include name; label = include, and unit where known);
+- style by kind: standard vs custom (color), `is_provisional` (dashed), nodes that contain a check (bold/filled), frontier reasons as distinct nodes;
+- one edge per `is_result-graph_edges` entry with the `label` (e.g. `class=>method`), dashed if provisional.
+
+- [ ] **Step 1: Failing unit test — minimal graph → DOT**
+
+```abap
+METHOD two_nodes_one_edge.
+  DATA ls_result TYPE zif_auth_scan_types=>ty_result.
+  ls_result-nodes = VALUE #( ( include = 'ZA' ) ( include = 'ZB' ) ).
+  ls_result-graph_edges = VALUE #( ( from_include = 'ZA' to_include = 'ZB' label = 'ZCL=>M' ) ).
+  DATA(lv) = NEW zcl_auth_scan_dot( )->to_dot( ls_result ).
+  cl_abap_unit_assert=>assert_true( xsdbool( lv CS 'digraph' ) ).
+  cl_abap_unit_assert=>assert_true( xsdbool( lv CS '"ZA" -> "ZB"' ) ).
+ENDMETHOD.
+```
+
+- [ ] **Step 2: Run — FAIL. Implement renderer. Run — PASS.**
+- [ ] **Step 3: Failing unit test — a node with a check is highlighted and a provisional edge is dashed.** Implement styling. Run — PASS.
+- [ ] **Step 4: DoD** — active, unit tests green, ATC clean.
 
 ---
 
@@ -488,11 +553,11 @@ This test is the plan's acceptance criterion: it proves the tool recovers, from 
 
 **Files:** `Z_AUTH_SCAN` (PROG).
 
-Logic: selection screen — `p_tcode` (obligatory), `p_depth` (default 100), `p_scope` (radio: into-standard default / custom-only). Call facade. Render two `CL_SALV_TABLE` grids (or one with a tabstrip): the **inventory** (check type, auth object, object-known flag, include, unit, line, provisional, path) and the **frontier** (source include, kind, reason, path). Handle `ZCX_AUTH_SCAN` → message.
+Logic: selection screen — `p_tcode` (obligatory), `p_depth` (default 100), `p_scope` (radio: into-standard default / custom-only), `p_dot` (checkbox: also produce DOT). Call facade. Render two `CL_SALV_TABLE` grids (or one with a tabstrip): the **inventory** (check type, auth object, object-known flag, include, unit, line, provisional, path) and the **frontier** (source include, kind, reason, path). If `p_dot` set, call `to_dot( )` and offer it (download via `cl_gui_frontend_services=>gui_download`, or show in a text viewer). Handle `ZCX_AUTH_SCAN` → message.
 
-- [ ] **Step 1: Create report, implement selection screen + facade call + ALV.**
-- [ ] **Step 2: Manual smoke via `sap-desktop`** — run `Z_AUTH_SCAN` for `/UCOM/CUSTOMER`, screenshot, confirm `E_INSTLN` row appears. (Report ALV logic isn't unit-tested; the facade test covers logic.)
-- [ ] **Step 3: DoD** — report active; smoke screenshot captured.
+- [ ] **Step 1: Create report, implement selection screen + facade call + ALV + DOT download option.**
+- [ ] **Step 2: Manual smoke via `sap-desktop`** — run `Z_AUTH_SCAN` for `/UCOM/CUSTOMER` (confirm `E_INSTLN` row) and `EMMACL` (confirm `B_EMMA_CAS` row); screenshot each. Tick `p_dot` once and confirm a `.dot` file is produced. (Report ALV logic isn't unit-tested; the facade tests cover logic.)
+- [ ] **Step 3: DoD** — report active; smoke screenshots captured.
 
 ---
 
@@ -515,5 +580,5 @@ Now that the tool is validated in-system, bring the source into git for human re
 - Tasks 1→2→3 first (types, interfaces, engine) so the core algorithm is locked with fakes before any DB work.
 - Tasks 4, 5, 6, 9 (DB/repository collaborators) are independent of each other and can be parallelized across subagents; each has its own integration tests against stable objects.
 - Task 7 precedes Task 8 (detector needs the registry table).
-- Task 10 depends on 3–9; Task 11 on 10; Task 12 last.
-- **Acceptance criterion for the whole tool:** the Task 10 end-to-end test recovering `E_INSTLN` from `/UCOM/CUSTOMER`.
+- Task 10 depends on 3–9; Task 10b (DOT) depends on 3 (needs the retained graph in `ty_result`) and can be built in parallel with 4–9; Task 11 on 10 + 10b; Task 12 last.
+- **Acceptance criteria for the whole tool (both must pass):** Task 10 Step 1 recovering `E_INSTLN` (auth FM) from `/UCOM/CUSTOMER`, and Task 10 Step 2b recovering `B_EMMA_CAS` (classic statement, literal + constant) from `EMMACL`.
