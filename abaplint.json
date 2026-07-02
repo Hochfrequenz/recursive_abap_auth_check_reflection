@@ -1,0 +1,27 @@
+{
+  "global": {
+    "files": "/src/**/*.*"
+  },
+  "syntax": {
+    "version": "v758",
+    "errorNamespace": "^(Z|Y|/).*$"
+  },
+  "rules": {
+    "parser_error": true,
+    "check_syntax": true,
+    "implement_methods": true,
+    "method_implemented_twice": true,
+    "unreachable_code": true,
+    "unused_variables": true,
+    "obsolete_statement": true,
+    "when_others_last": true,
+    "sql_escape_host_variables": true,
+    "identical_form_names": true,
+    "line_length": {
+      "length": 160
+    },
+    "keyword_case": {
+      "style": "upper"
+    }
+  }
+}

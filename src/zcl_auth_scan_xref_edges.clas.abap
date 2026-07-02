@@ -50,8 +50,7 @@ CLASS zcl_auth_scan_xref_edges IMPLEMENTATION.
     SPLIT raw AT '\' INTO DATA(object_part) DATA(rest).
     target-object = object_part.
     IF rest CS ':'.
-      SPLIT rest AT ':' INTO DATA(tag) DATA(method).
-      target-sub_name = method.
+      target-sub_name = substring_after( val = rest sub = ':' ).
     ENDIF.
   ENDMETHOD.
 
