@@ -75,6 +75,16 @@ Decision: **A** — an in-system ABAP analyzer. It scales into standard code
 is the more shippable model. B is retained conceptually only as a possible
 alternate edge-provider for edge cases.
 
+**End-to-end validation (manual, live).** The full concept was walked by hand on
+`/UCOM/CUSTOMER`: entry report `/UCOM/RP_MAINTAIN_CUSTOMER` (no check) →
+`/UCOM/CL_CUSTOMER_FACTORY=>GET_CUSTOMER_ACCESS` → `/UCOM/CL_CUSTOMER_ACCESS`
+(reached behind interface `/UCOM/IF_CUSTOMER_ACCESS`) → private method
+`CHECK_AUTHORIZATION` → `CALL FUNCTION 'ISU_AUTHORITY_CHECK' x_object = 'E_INSTLN'`.
+This confirmed: (a) the real guard sits several hops below the transaction in a
+private method, invisible from the entry point; (b) it is a call edge that falls
+out of the graph; (c) the object literal is statically recoverable; and (d) it
+motivated the FM-argument extraction and interface-dispatch refinements above.
+
 ## Architecture
 
 **One algorithm, pluggable edge-provider.** A reachability engine performs a
@@ -129,6 +139,23 @@ The three types split by detection mechanism:
   system), extracting the statement, its `OBJECT`, `ID`/`FIELD` operands, and line
   number.
 
+**Extracting the authorization object from FM/class checks.** Recording "an auth
+FM was called" is not enough — the inventory needs the actual authorization
+object. For each known auth API the registry stores **which argument carries the
+object**, and the detector reads that argument at the call site (from the
+cross-reference / a light source read). Example: `ISU_AUTHORITY_CHECK` → `X_OBJECT`,
+`AUTHORITY_CHECK` → `OBJECT`. When the argument is a literal or a constant
+(the common case, e.g. `lc_object_e_instln VALUE 'E_INSTLN'`), the object is
+recovered statically; when it is a runtime variable, the object is reported as
+*undetermined* for that call.
+
+**Prefix matching is insufficient — the registry is essential.** Real checks are
+frequently domain wrappers whose names do not match `AUTHORITY_CHECK*` (validated
+live: `/UCOM/CUSTOMER` guards via `ISU_AUTHORITY_CHECK` on object `E_INSTLN`). The
+shipped registry must therefore include known wrappers (`ISU_AUTHORITY_CHECK`,
+`AUTHORITY_CHECK`, `AUTHORITY_CHECK_TCODE`, `VIEW_AUTHORITY_CHECK`,
+`CL_ABAP_AUTHORITY_CHECK`, …) and remain customer-extensible.
+
 The known-auth-API registry ships pre-filled with SAP-standard entries and is
 **customer-extensible**, so shops that wrap `AUTHORITY-CHECK` in a Z-helper class
 or FM can register it and have it detected as a check.
@@ -176,7 +203,11 @@ site, so a human knows exactly where the static picture has blind spots.
 2. **Edge provider (interface + index impl)** — include → outgoing edges. Depends
    on `WBCROSSGT`/`CROSS`.
 3. **Object→include resolver** — method/FM/form → implementing include. Depends on
-   SEO services / `TFDIR`.
+   SEO services / `TFDIR`. Must handle **interface-dispatch hops**: a call to an
+   interface method (e.g. `/UCOM/IF_CUSTOMER_ACCESS~RELOAD_CUSTOMER`) resolves to
+   the implementing class method(s) — the concrete class is often produced by a
+   factory, so map interface method → implementing class(es) via SEO relations
+   (`SEOMETAREL`) and enqueue each.
 4. **Dynamic/BAdI expander** — dynamic & BAdI edges → candidates + frontier nodes.
    Depends on enhancement registry.
 5. **Reachability engine** — BFS orchestration, visited set, guards. Depends on 1–4.
