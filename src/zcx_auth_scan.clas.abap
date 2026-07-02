@@ -1,3 +1,8 @@
+*----------------------------------------------------------------------*
+* recursive_abap_auth_check_reflection
+* https://github.com/Hochfrequenz/recursive_abap_auth_check_reflection
+* SPDX-License-Identifier: MIT
+*----------------------------------------------------------------------*
 CLASS zcx_auth_scan DEFINITION
   PUBLIC
   INHERITING FROM cx_static_check
@@ -26,4 +31,3 @@ CLASS zcx_auth_scan IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
-

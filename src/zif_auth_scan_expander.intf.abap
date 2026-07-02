@@ -1,3 +1,8 @@
+*----------------------------------------------------------------------*
+* recursive_abap_auth_check_reflection
+* https://github.com/Hochfrequenz/recursive_abap_auth_check_reflection
+* SPDX-License-Identifier: MIT
+*----------------------------------------------------------------------*
 INTERFACE zif_auth_scan_expander
   PUBLIC.
 

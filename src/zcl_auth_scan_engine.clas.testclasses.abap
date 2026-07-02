@@ -1,3 +1,8 @@
+*----------------------------------------------------------------------*
+* recursive_abap_auth_check_reflection
+* https://github.com/Hochfrequenz/recursive_abap_auth_check_reflection
+* SPDX-License-Identifier: MIT
+*----------------------------------------------------------------------*
 *"* ABAP Unit tests for ZCL_AUTH_SCAN_ENGINE — pure logic, fake collaborators.
 
 CLASS ltd_entry DEFINITION.

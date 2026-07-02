@@ -1,3 +1,8 @@
+*----------------------------------------------------------------------*
+* recursive_abap_auth_check_reflection
+* https://github.com/Hochfrequenz/recursive_abap_auth_check_reflection
+* SPDX-License-Identifier: MIT
+*----------------------------------------------------------------------*
 *"* ABAP Unit — end-to-end acceptance tests (live fixtures).
 *"* NOTE: abapGit does not re-import this test include on pull; after a pull it
 *"* must be re-applied to SAP via ADT (create_test_include + set_include_source).

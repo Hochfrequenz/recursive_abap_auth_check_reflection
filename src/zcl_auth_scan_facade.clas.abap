@@ -1,3 +1,8 @@
+*----------------------------------------------------------------------*
+* recursive_abap_auth_check_reflection
+* https://github.com/Hochfrequenz/recursive_abap_auth_check_reflection
+* SPDX-License-Identifier: MIT
+*----------------------------------------------------------------------*
 CLASS zcl_auth_scan_facade DEFINITION
   PUBLIC
   CREATE PRIVATE.
@@ -56,8 +61,7 @@ CLASS zcl_auth_scan_facade IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD to_dot.
-    " DOT export (Task 10b) — stub until ZCL_AUTH_SCAN_DOT is implemented.
-    RETURN.
+    dot = NEW zcl_auth_scan_dot( )->to_dot( result ).
   ENDMETHOD.
 
 ENDCLASS.
