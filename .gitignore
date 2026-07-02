@@ -1,0 +1,10 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Local tooling / scratch
+.claude/
+scratchpad/
+*.log
