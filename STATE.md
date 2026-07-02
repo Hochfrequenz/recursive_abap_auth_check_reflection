@@ -49,6 +49,35 @@ exception, and the 5 collaborator interfaces (functional signatures, DOT-ready
 `node`/`graph_edge`/`result` types). These are the intended content; apply them
 to the abapGit `src/` files once the repo is serialized.
 
+## Progress
+
+- ✅ Foundation (types interface + exception + 5 collaborator interfaces) — clean
+  no-Hungarian, active. Delivered via abapGit pull.
+- ✅ **Task 3 — engine `ZCL_AUTH_SCAN_ENGINE`**: BFS with visited-set (cycle-safe),
+  depth cap, scope boundary, provisional propagation, graph retention, check
+  aggregation. **6/6 ABAP Unit tests green.**
+
+## Workflow notes (important)
+
+- Main class/interface source syncs cleanly via **abapGit pull** (edit `src/*.abap`
+  → `git push` → `sap_abapgit_pull(repo, trkorr=S4UK903496)`), lock-free.
+- **abapGit here does NOT sync `*.clas.testclasses.abap`.** Deliver test includes
+  via ADT: `lock_object` → `create_test_include` (first time only) →
+  `set_include_source(include='testclasses', source=…)` → `activate_object` →
+  `run_unit_tests`. A fresh session locks cleanly. Keep the identical test source
+  in git (`src/*.clas.testclasses.abap`) for review + abaplint CI.
+- Lock bug only bites when re-editing an already-activated object with an orphaned
+  lock; in a fresh session the first lock succeeds.
+
+## End tasks (do after implementation + tests pass)
+
+- Install **abaplint** GitHub Actions CI (https://github.com/abaplint/actions-abaplint),
+  add `abaplint.json`, fix until green.
+- **Compare vs SUIM**: document how our deep-reachability inventory differs from
+  SUIM (which largely reports transaction-start / SU24-level auth, not nested checks).
+- Add a **mermaid diagram** to the README: high-level tool flow, contrasted with
+  what SUIM checks in the same diagram.
+
 ## Next steps (post-restart, Workflow B)
 
 1. **Provide a valid GitHub PAT** (the MCP env PAT is expired) and **register
