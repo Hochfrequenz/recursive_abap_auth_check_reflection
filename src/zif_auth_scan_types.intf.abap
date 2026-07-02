@@ -2,113 +2,138 @@ INTERFACE zif_auth_scan_types
   PUBLIC.
 
   "! Kind of a call-graph edge.
-  TYPES ty_edge_kind TYPE c LENGTH 1.
+  TYPES edge_kind TYPE c LENGTH 1.
 
   CONSTANTS:
-    "! Edge kinds: method / func-module / perform / interface / dynamic / BAdI.
-    BEGIN OF gc_edge_kind,
-      method  TYPE ty_edge_kind VALUE 'M',
-      func    TYPE ty_edge_kind VALUE 'C',
-      perform TYPE ty_edge_kind VALUE 'P',
-      intf    TYPE ty_edge_kind VALUE 'I',
-      dynamic TYPE ty_edge_kind VALUE 'D',
-      badi    TYPE ty_edge_kind VALUE 'B',
-    END OF gc_edge_kind.
+    "! Edge kinds: method / function-module / perform / interface / dynamic / BAdI.
+    BEGIN OF edge_kinds,
+      method    TYPE edge_kind VALUE 'M',
+      function  TYPE edge_kind VALUE 'C',
+      perform   TYPE edge_kind VALUE 'P',
+      interface TYPE edge_kind VALUE 'I',
+      dynamic   TYPE edge_kind VALUE 'D',
+      badi      TYPE edge_kind VALUE 'B',
+    END OF edge_kinds.
 
   "! Kind of an authorization check.
-  TYPES ty_check_type TYPE c LENGTH 1.
+  TYPES check_type TYPE c LENGTH 1.
 
   CONSTANTS:
     "! Check types: classic statement / class-based / function-module.
-    BEGIN OF gc_check_type,
-      statement TYPE ty_check_type VALUE 'S',
-      class     TYPE ty_check_type VALUE 'K',
-      func      TYPE ty_check_type VALUE 'F',
-    END OF gc_check_type.
+    BEGIN OF check_types,
+      statement       TYPE check_type VALUE 'S',
+      class_based     TYPE check_type VALUE 'K',
+      function_module TYPE check_type VALUE 'F',
+    END OF check_types.
 
   "! Reachability scope.
-  TYPES ty_scope TYPE c LENGTH 1.
+  TYPES scope TYPE c LENGTH 1.
 
   CONSTANTS:
     "! Scope: stop at the custom/standard boundary, or descend into standard (default).
-    BEGIN OF gc_scope,
-      custom_only   TYPE ty_scope VALUE 'C',
-      into_standard TYPE ty_scope VALUE 'S',
-    END OF gc_scope.
+    BEGIN OF scopes,
+      custom_only   TYPE scope VALUE 'C',
+      into_standard TYPE scope VALUE 'S',
+    END OF scopes.
 
   TYPES:
     "! List of program includes.
-    ty_includes TYPE STANDARD TABLE OF progname WITH EMPTY KEY,
+    includes TYPE STANDARD TABLE OF progname WITH EMPTY KEY,
 
-    "! A referenced object (parsed from the cross-reference index).
-    BEGIN OF ty_object_ref,
+    "! A referenced object, parsed from the cross-reference index.
+    BEGIN OF object_ref,
       otype    TYPE string,
       object   TYPE string,
       sub_name TYPE string,
       raw      TYPE string,
-    END OF ty_object_ref,
+    END OF object_ref,
 
     "! An outgoing call edge from one include.
-    BEGIN OF ty_edge,
+    BEGIN OF edge,
       source_include TYPE progname,
-      kind           TYPE ty_edge_kind,
-      target         TYPE ty_object_ref,
-    END OF ty_edge,
-    ty_edges TYPE STANDARD TABLE OF ty_edge WITH EMPTY KEY,
+      kind           TYPE edge_kind,
+      target         TYPE object_ref,
+    END OF edge,
+    edges TYPE STANDARD TABLE OF edge WITH EMPTY KEY,
 
-    "! A visited node in the reachability graph.
-    BEGIN OF ty_node,
+    "! A visited code-unit node in the reachability graph.
+    "! label is the human-readable unit (REPORT x / class=>method / FUNCTION x
+    "! / FORM x); kind is how it is reached (initial/blank for the entry unit).
+    BEGIN OF node,
       include        TYPE progname,
+      label          TYPE string,
+      kind           TYPE edge_kind,
       depth          TYPE i,
       is_standard    TYPE abap_bool,
       is_provisional TYPE abap_bool,
       path           TYPE string,
-    END OF ty_node,
-    ty_nodes TYPE STANDARD TABLE OF ty_node WITH EMPTY KEY,
+    END OF node,
+    nodes TYPE STANDARD TABLE OF node WITH EMPTY KEY,
 
-    "! One detected authorization check.
-    BEGIN OF ty_check,
-      check_type     TYPE ty_check_type,
-      auth_object    TYPE string,
+    "! One detected authorization check. The detector fills type / object /
+    "! object_known / details / include / unit / line; the engine augments
+    "! path and is_provisional from the reaching node.
+    BEGIN OF auth_check,
+      type           TYPE check_type,
+      object         TYPE string,
       object_known   TYPE abap_bool,
       details        TYPE string,
       include        TYPE progname,
-      unit_name      TYPE string,
+      unit           TYPE string,
       line           TYPE i,
       path           TYPE string,
       is_provisional TYPE abap_bool,
-    END OF ty_check,
-    ty_checks TYPE STANDARD TABLE OF ty_check WITH EMPTY KEY,
+    END OF auth_check,
+    auth_checks TYPE STANDARD TABLE OF auth_check WITH EMPTY KEY,
 
-    "! An unresolved (dynamic/BAdI) edge - a documented blind spot.
-    BEGIN OF ty_frontier,
+    "! An unresolved dynamic/BAdI edge - a documented blind spot.
+    BEGIN OF frontier,
       source_include TYPE progname,
-      kind           TYPE ty_edge_kind,
+      kind           TYPE edge_kind,
       reason         TYPE string,
       raw            TYPE string,
       path           TYPE string,
-    END OF ty_frontier,
-    ty_frontiers TYPE STANDARD TABLE OF ty_frontier WITH EMPTY KEY,
+    END OF frontier,
+    frontiers TYPE STANDARD TABLE OF frontier WITH EMPTY KEY,
 
     "! A resolved graph edge, retained for DOT export.
-    BEGIN OF ty_graph_edge,
+    BEGIN OF graph_edge,
       from_include   TYPE progname,
       to_include     TYPE progname,
-      kind           TYPE ty_edge_kind,
+      kind           TYPE edge_kind,
       label          TYPE string,
       is_provisional TYPE abap_bool,
-    END OF ty_graph_edge,
-    ty_graph_edges TYPE STANDARD TABLE OF ty_graph_edge WITH EMPTY KEY,
+    END OF graph_edge,
+    graph_edges TYPE STANDARD TABLE OF graph_edge WITH EMPTY KEY,
+
+    "! Outcome of resolving an edge target to implementing include(s).
+    BEGIN OF resolution,
+      includes      TYPE includes,
+      is_unresolved TYPE abap_bool,
+    END OF resolution,
+
+    "! Outcome of expanding a dynamic/BAdI edge.
+    BEGIN OF expansion,
+      includes     TYPE includes,
+      frontier     TYPE frontier,
+      has_frontier TYPE abap_bool,
+    END OF expansion,
+
+    "! Outcome of classifying an edge as an authorization-API call.
+    BEGIN OF classification,
+      is_check TYPE abap_bool,
+      check    TYPE auth_check,
+    END OF classification,
 
     "! Full scan result: inventory, frontier, retained graph and stats.
-    BEGIN OF ty_result,
-      tcode         TYPE tcode,
-      checks        TYPE ty_checks,
-      frontier      TYPE ty_frontiers,
-      nodes         TYPE ty_nodes,
-      graph_edges   TYPE ty_graph_edges,
+    BEGIN OF result,
+      transaction   TYPE tcode,
+      checks        TYPE auth_checks,
+      frontier      TYPE frontiers,
+      nodes         TYPE nodes,
+      graph_edges   TYPE graph_edges,
       nodes_seen    TYPE i,
       max_depth_hit TYPE abap_bool,
-    END OF ty_result.
+    END OF result.
 
 ENDINTERFACE.
