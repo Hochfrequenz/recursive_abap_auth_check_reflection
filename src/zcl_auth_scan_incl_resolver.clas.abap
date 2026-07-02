@@ -7,7 +7,7 @@ CLASS zcl_auth_scan_incl_resolver DEFINITION
 
   PRIVATE SECTION.
     CONSTANTS interface_type TYPE seoclstype VALUE '1'.
-    CONSTANTS implements_rel TYPE seomtdc0-reltype VALUE '1'.
+    CONSTANTS implements_rel TYPE seometarel-reltype VALUE '1'.
 
     "! Method-implementation include for a class + component, or empty if none.
     METHODS method_include

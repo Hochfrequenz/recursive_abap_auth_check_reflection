@@ -32,7 +32,7 @@ CLASS zcl_auth_scan_detector DEFINITION
     "! Resolve a token to a literal value (string literal, local constant, or
     "! a global constant/attribute via dynamic ASSIGN).
     METHODS resolve_token
-      IMPORTING token         TYPE stokesx
+      IMPORTING token         TYPE stokes
                 constants     TYPE const_map
       RETURNING VALUE(result) TYPE resolved.
     METHODS strip_quotes
@@ -58,7 +58,7 @@ CLASS zcl_auth_scan_detector IMPLEMENTATION.
     DATA(constants) = local_constants( source ).
     DATA(function_modules) = registered_function_modules( ).
 
-    DATA tokens     TYPE STANDARD TABLE OF stokesx.
+    DATA tokens     TYPE STANDARD TABLE OF stokes.
     DATA statements TYPE STANDARD TABLE OF sstmnt.
     SCAN ABAP-SOURCE source TOKENS INTO tokens STATEMENTS INTO statements.
 
@@ -124,7 +124,7 @@ CLASS zcl_auth_scan_detector IMPLEMENTATION.
 
   METHOD local_constants.
     LOOP AT source INTO DATA(line).
-      FIND FIRST OCCURRENCE OF REGEX '([\w/]+)\s+TYPE\s+[\w/]+\s+VALUE\s+''([^'']*)'''
+      FIND FIRST OCCURRENCE OF PCRE '([\w/]+)\s+TYPE\s+[\w/]+\s+VALUE\s+''([^'']*)'''
         IN line IGNORING CASE SUBMATCHES DATA(name) DATA(value).
       IF sy-subrc = 0.
         INSERT VALUE #( name = to_upper( name ) value = value ) INTO TABLE result.
