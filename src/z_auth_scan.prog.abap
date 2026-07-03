@@ -16,7 +16,7 @@ SELECTION-SCREEN END OF LINE.
 
 SELECTION-SCREEN BEGIN OF LINE.
 SELECTION-SCREEN COMMENT 1(31) c_depth FOR FIELD p_depth.
-PARAMETERS p_depth TYPE i DEFAULT 100.
+PARAMETERS p_depth TYPE i DEFAULT 20.
 SELECTION-SCREEN END OF LINE.
 
 SELECTION-SCREEN BEGIN OF LINE.
@@ -359,7 +359,7 @@ AT SELECTION-SCREEN ON p_tcode.
 INITIALIZATION.
   c_tcode = 'Transaction code'.
   c_depth = 'Max. recursion depth'.
-  c_hint  = 'Note: a high depth (e.g. 100) with SAP standard scope can take a while.'.
+  c_hint  = 'Note: raising the depth (e.g. to 100) with SAP standard scope can take a while.'.
   c_std   = 'Descend into SAP standard'.
   c_cust  = 'Custom code only'.
   c_dot   = 'Show call graph (DOT / kroki.io)'.
