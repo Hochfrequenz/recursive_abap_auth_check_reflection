@@ -1,7 +1,8 @@
 # recursive_abap_auth_check_reflection
 <!-- 1 line per sentence -->
 
-Static analyzer for SAP ABAP: given a transaction code, it recursively computes the reachable call graph and produces a **complete inventory of authorization checks** buried anywhere in the reached code - **without** running the transaction.
+ABAP based static analyzer for SAP ABAP code: given a transaction code, it recursively computes the reachable call graph and produces a **complete inventory of authorization checks** buried anywhere in the reached code - **without** running the transaction (compile time analyis).
+This is in contrast to the runtime analysis using `stauthtrace` which requires actively running into authorization checks.
 
 ## Why
 
