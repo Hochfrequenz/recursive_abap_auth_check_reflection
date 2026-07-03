@@ -274,18 +274,35 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD open_graph.
+    CONSTANTS kroki_max_uri TYPE i VALUE 4096.
+    CONSTANTS paste_tool    TYPE string VALUE `https://www.tools-online.app/tools/graphviz`.
+
     DATA(dot)    = facade->to_dot( result ).
     DATA(url)    = zcl_auth_scan_dot=>kroki_url( dot ).
     DATA(source) = dot.
     REPLACE ALL OCCURRENCES OF `&` IN source WITH `&amp;`.
     REPLACE ALL OCCURRENCES OF `<` IN source WITH `&lt;`.
     REPLACE ALL OCCURRENCES OF `>` IN source WITH `&gt;`.
+
+    " kroki's GET endpoint rejects URLs beyond ~4096 chars (HTTP 414). For big
+    " graphs steer the user to a paste-based renderer instead of the dead link.
+    DATA(kroki_block) = COND string(
+      WHEN strlen( url ) <= kroki_max_uri
+      THEN |<p><a href="{ url }" target="_blank">&#9654; Render on kroki.io</a> |
+        && |(SAP itself may not reach kroki.io — copy the link into your browser):</p>|
+        && |<p><input readonly onclick="this.select()" |
+        && |style="width:100%;font-family:monospace" value="{ url }"></p>|
+      ELSE |<p style="color:#cc0000">This graph is too large for a kroki.io link |
+        && |({ strlen( url ) } chars &gt; { kroki_max_uri } limit &rarr; HTTP 414). |
+        && |Paste the DOT below into the renderer instead.</p>| ).
+
     DATA(html) =
          |<html><body style="font-family:sans-serif">|
       && |<h3>Reachable call graph for { p_tcode }</h3>|
-      && |<p><a href="{ url }" target="_blank">&#9654; Render this graph on kroki.io</a></p>|
-      && |<p>Or copy this link into a browser that can reach kroki.io:</p>|
-      && |<p><input readonly onclick="this.select()" style="width:100%;font-family:monospace" value="{ url }"></p>|
+      && kroki_block
+      && |<p>Or paste the DOT below into |
+      && |<a href="{ paste_tool }" target="_blank">tools-online.app/tools/graphviz</a> |
+      && |(handles larger graphs than kroki.io):</p>|
       && |<pre>{ source }</pre>|
       && |<hr><p style="color:#888888">recursive_abap_auth_check_reflection &middot; |
       && |<a href="https://github.com/Hochfrequenz/recursive_abap_auth_check_reflection" target="_blank">GitHub</a>|
