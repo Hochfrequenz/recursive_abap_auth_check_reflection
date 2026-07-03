@@ -76,8 +76,8 @@ CLASS lcl_app DEFINITION CREATE PUBLIC.
     METHODS build_rows.
     METHODS load_texts.
     "! Human-readable description of an authorization check, composed as
-    "! "<object text> — <activity text>" with any further authorization
-    "! field ids appended in parentheses. Falls back to raw object / code
+    "! "object text — activity text" with any further authorization field
+    "! ids appended in parentheses. Falls back to the raw object / code
     "! whenever a text does not resolve.
     METHODS describe
       IMPORTING object         TYPE string
