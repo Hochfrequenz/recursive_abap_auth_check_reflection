@@ -57,6 +57,26 @@ So an `AUTHORITY-CHECK` buried in a private method several calls deep — e.g. `
 
 This tool is complementary: it statically walks the reachable code and reports the *actual* checks in it — the authorization object, the `ID`/`FIELD` values, and the call path that reaches them — including checks SU24 never captured.
 
+## Compared to STAUTHTRACE (runtime authorization trace)
+
+`STAUTHTRACE` ("Berechtigungstrace", the modern front-end that supersedes the ST01 authorization-trace workflow — ST01 itself lives on for general system tracing) is the closest SAP analogue to this tool, but it works from the opposite direction: it is a **dynamic, runtime** trace.
+While the trace is active it records every `AUTHORITY-CHECK` that is *actually executed*, with the authorization object, the concrete field values, the return code, the user, and the source line — system-wide across all application servers. (Its siblings `STUSERTRACE` and `STUSOBTRACE` persist traces in the database for long-term capture and for deriving SU24 defaults.)
+
+This tool is **static**: given only a transaction code it walks the reachable call graph and inventories every check *without running anything*.
+
+|                                   | STAUTHTRACE (runtime trace)                          | This tool (static reachability)                              |
+|-----------------------------------|------------------------------------------------------|--------------------------------------------------------------|
+| Coverage                          | Only code paths actually **executed** during the trace | **All reachable** paths, including branches never exercised |
+| Needs to run the scenario / data  | Yes (live, with the right test data)                 | No — analyzes without executing                              |
+| Kernel / implicit checks (`S_TCODE`, `S_TABU_*`, `S_RFC`) | **Captured** (they fire at runtime)                  | **Missed** — they are not `AUTHORITY-CHECK` statements in the ABAP call graph |
+| Dynamic dispatch, RFC, dynamic `SUBMIT`/`CALL TRANSACTION`, runtime BAdIs | Resolved exactly (whatever actually ran)            | Best-effort; unresolved edges are flagged **provisional / frontier** |
+| Concrete field values & pass/fail RC per user | Yes — actionable for fixing a specific role         | No — reports the checked object/`ID`s, not a user's runtime result |
+| False positives                   | None — every entry genuinely fired                   | Possible — reports checks on paths that may be infeasible at runtime |
+| Repeatable / CI-friendly, no observer effect | No (short-term ring buffer, live capture)            | Yes — deterministic, no live run                             |
+| Shows the call path reaching a check | No                                                   | Yes — from the transaction down to the check                 |
+
+The two are **complementary**: STAUTHTRACE tells you *what actually fired, for whom, with which values*; this tool tells you *what could be reached* — a complete static inventory that does not depend on someone exercising every path. Use the static scan to find checks a trace might never hit, and STAUTHTRACE to confirm real values, return codes, and the kernel/implicit checks this tool cannot see.
+
 ## Running it
 
 ![Z_AUTH_SCAN in action: enter a transaction code, pick the scope, and get an ALV of the reachable authorization checks with a readable Description column](docs/media/zauth_scan_demo.gif)
