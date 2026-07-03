@@ -57,6 +57,20 @@ So an `AUTHORITY-CHECK` buried in a private method several calls deep — e.g. `
 
 This tool is complementary: it statically walks the reachable code and reports the *actual* checks in it — the authorization object, the `ID`/`FIELD` values, and the call path that reaches them — including checks SU24 never captured.
 
+## Running it
+
+Start transaction **`ZAUTH_SCAN`** (or run report `Z_AUTH_SCAN` via `SA38`).
+
+On the selection screen:
+
+- **Transaction code** — the transaction to analyze (F4 help lists all transactions).
+- **Max. recursion depth** — how deep to follow the call graph (default 100).
+- **Descend into SAP standard** / **Custom code only** — scope of the walk.
+- **Show call graph (DOT / kroki.io)** — render the reachable graph instead of the list.
+
+The result is an ALV grouped by authorization object.
+Alongside the raw `ID`/`FIELD` values, a **Description** column renders each check in plain language (e.g. `B_EMMA_CAS` + `ACTVT=03` → "Case Authorization — Display"), resolving the authorization-object and activity texts in the logon language (English fallback).
+
 ## Development coordinates
 
 Where this lives while it is being built (in-system first; abapGit later).
@@ -65,11 +79,5 @@ Where this lives while it is being built (in-system first; abapGit later).
 - **Package:** `ZAUTH_SCAN` (transportable; software component HOME, transport layer ZS4U).
 - **Transport request:** `S4UK903496` (workbench, modifiable — the project TR; never released without explicit permission).
 - **Message class:** `ZAUTH_SCAN` (messages 001–004).
-- **Object prefixes:** `ZCL_AUTH_SCAN_*` (classes), `ZIF_AUTH_SCAN_*` (interfaces), `ZCX_AUTH_SCAN` (exception), `Z_AUTH_SCAN` (report), `ZAUTH_SCAN_*` (DDIC / message class).
+- **Object prefixes:** `ZCL_AUTH_SCAN_*` (classes), `ZIF_AUTH_SCAN_*` (interfaces), `ZCX_AUTH_SCAN` (exception), `Z_AUTH_SCAN` (report), `ZAUTH_SCAN` (transaction), `ZAUTH_SCAN_*` (DDIC / message class).
 - **abapGit:** linking this repo to the package needs a valid GitHub PAT (the MCP env-var PAT is expired/absent) — supply one before the Task 12 roundtrip.
-
-## Status
-
-Working. All components implemented (entry resolver, cross-reference edge provider, include resolver, dynamic/BAdI expander, reachability engine, detector, DOT exporter, ALV report).
-ABAP Unit: engine unit tests + end-to-end acceptance tests green — the tool recovers `E_INSTLN` from `/UCOM/CUSTOMER` and `B_EMMA_CAS` from `EMMACL` (verified in SAP GUI too).
-abaplint CI runs clean. Plan and design under `docs/superpowers/`.
