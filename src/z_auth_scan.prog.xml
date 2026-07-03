@@ -13,6 +13,13 @@
    <I18N_TPOOL>
     <item>
      <LANGUAGE>E</LANGUAGE>
+     <TPOOL>
+      <item>
+       <ID>R</ID>
+       <ENTRY>Authorization-check scanner</ENTRY>
+       <LENGTH>27</LENGTH>
+      </item>
+     </TPOOL>
     </item>
    </I18N_TPOOL>
   </asx:values>
