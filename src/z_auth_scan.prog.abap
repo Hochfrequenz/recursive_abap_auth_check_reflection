@@ -29,14 +29,17 @@ PARAMETERS p_cust RADIOBUTTON GROUP scp.
 SELECTION-SCREEN COMMENT 3(40) c_cust FOR FIELD p_cust.
 SELECTION-SCREEN END OF LINE.
 
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_dot AS CHECKBOX.
+SELECTION-SCREEN COMMENT 3(40) c_dot FOR FIELD p_dot.
+SELECTION-SCREEN END OF LINE.
+
 
 CLASS lcl_app DEFINITION CREATE PUBLIC.
   PUBLIC SECTION.
     "! F4 value help: transactions from TSTC (with description).
     CLASS-METHODS value_help.
     METHODS main.
-    METHODS on_added_function FOR EVENT added_function OF cl_salv_events_table
-      IMPORTING e_salv_function.
 
   PRIVATE SECTION.
     "! Flat display row (CHAR fields — ALV cannot sort/subtotal STRING columns).
@@ -116,6 +119,11 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
+    IF p_dot = abap_true.
+      open_graph( ).
+      RETURN.
+    ENDIF.
+
     build_rows( ).
 
     TRY.
@@ -123,12 +131,6 @@ CLASS lcl_app IMPLEMENTATION.
                                 CHANGING  t_table      = rows ).
 
         alv->get_functions( )->set_all( ).
-        alv->get_functions( )->add_function(
-          name     = 'KROKI'
-          text     = 'Graph (kroki.io)'
-          tooltip  = 'Render the reachable call graph on kroki.io'
-          position = if_salv_c_function_position=>right_of_salv_functions ).
-        SET HANDLER on_added_function FOR alv->get_event( ).
 
         DATA(columns) = alv->get_columns( ).
         columns->set_optimize( ).
@@ -168,12 +170,6 @@ CLASS lcl_app IMPLEMENTATION.
         call_path    = check-path
         provisional  = check-is_provisional ) TO rows.
     ENDLOOP.
-  ENDMETHOD.
-
-  METHOD on_added_function.
-    IF e_salv_function = 'KROKI'.
-      open_graph( ).
-    ENDIF.
   ENDMETHOD.
 
   METHOD open_graph.
@@ -235,6 +231,7 @@ INITIALIZATION.
   c_depth = 'Max. recursion depth'.
   c_std   = 'Descend into SAP standard'.
   c_cust  = 'Custom code only'.
+  c_dot   = 'Show call graph (DOT / kroki.io)'.
 
 START-OF-SELECTION.
   NEW lcl_app( )->main( ).
