@@ -15,7 +15,7 @@ CLASS ltc_kroki DEFINITION FINAL FOR TESTING
     "! compress_binary must return a BARE DEFLATE stream (RFC 1951): no zlib
     "! (0x78..) header and no gzip (0x1F8B) framing. kroki_url relies on this to
     "! wrap it as zlib. If a kernel ever changes this, the guard fails loudly.
-    METHODS compress_binary_is_bare_deflate FOR TESTING.
+    METHODS compress_binary_bare_deflate FOR TESTING.
     "! The wrapped body must inflate back to the source — proving it is the
     "! valid DEFLATE payload kroki's zlib inflater expects.
     METHODS deflate_body_round_trips FOR TESTING.
@@ -36,7 +36,7 @@ CLASS ltc_kroki IMPLEMENTATION.
       IMPORTING gzip_out = deflate ).
   ENDMETHOD.
 
-  METHOD compress_binary_is_bare_deflate.
+  METHOD compress_binary_bare_deflate.
     DATA(head) = |{ deflate_of( `digraph{ a->b }` ) }|.
     cl_abap_unit_assert=>assert_char_np(
       act = head exp = '78*'
