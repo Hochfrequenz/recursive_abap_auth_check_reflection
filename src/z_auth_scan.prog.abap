@@ -56,6 +56,7 @@ CLASS lcl_app DEFINITION CREATE PUBLIC.
              include      TYPE progname,
              unit         TYPE c LENGTH 61,
              line         TYPE i,
+             depth        TYPE i,
              call_path    TYPE c LENGTH 255,
              provisional  TYPE abap_bool,
            END OF display_row,
@@ -182,11 +183,15 @@ CLASS lcl_app IMPLEMENTATION.
   METHOD build_rows.
     load_texts( ).
     LOOP AT result-checks INTO DATA(check).
+      " Depth = number of call hops from the transaction, derived from the
+      " reaching path ("tcode -> a=>b -> c=>d"); the seed itself is depth 0.
+      FIND ALL OCCURRENCES OF ` -> ` IN check-path MATCH COUNT DATA(depth).
       APPEND VALUE #(
         auth_object  = check-object
         description  = describe( object   = check-object
                                  activity = check-details )
         activity     = check-details
+        depth        = depth
         check_type   = SWITCH #( check-type
                          WHEN zif_auth_scan_types=>check_types-statement       THEN 'AUTHORITY-CHECK'
                          WHEN zif_auth_scan_types=>check_types-function_module THEN 'Function module'
@@ -327,6 +332,7 @@ CLASS lcl_app IMPLEMENTATION.
       ( field = 'INCLUDE'      short = 'Include'  med = 'Include'       long = 'Include' )
       ( field = 'UNIT'         short = 'Unit'     med = 'Unit'          long = 'Method / form' )
       ( field = 'LINE'         short = 'Line'     med = 'Line'          long = 'Source line' )
+      ( field = 'DEPTH'        short = 'Depth'    med = 'Call depth'    long = 'Call depth from transaction' )
       ( field = 'CALL_PATH'    short = 'Path'     med = 'Call path'     long = 'Call path from transaction' )
       ( field = 'PROVISIONAL'  short = 'Prov.'    med = 'Provisional'   long = 'Provisional (heuristic)' ) ).
 
