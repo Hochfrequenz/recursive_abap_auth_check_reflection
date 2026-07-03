@@ -45,6 +45,7 @@ CLASS lcl_app DEFINITION CREATE PUBLIC.
     "! Flat display row (CHAR fields — ALV cannot sort/subtotal STRING columns).
     TYPES: BEGIN OF display_row,
              auth_object  TYPE c LENGTH 30,
+             description  TYPE c LENGTH 120,
              activity     TYPE c LENGTH 60,
              check_type   TYPE c LENGTH 20,
              object_known TYPE abap_bool,
@@ -56,11 +57,32 @@ CLASS lcl_app DEFINITION CREATE PUBLIC.
            END OF display_row,
            display_tab TYPE STANDARD TABLE OF display_row WITH EMPTY KEY.
 
+    "! One resolved short text keyed by object / activity code.
+    TYPES: BEGIN OF text_entry,
+             key  TYPE string,
+             text TYPE string,
+           END OF text_entry,
+           text_map TYPE HASHED TABLE OF text_entry WITH UNIQUE KEY key.
+
     DATA facade TYPE REF TO zcl_auth_scan_facade.
     DATA result TYPE zif_auth_scan_types=>result.
     DATA rows   TYPE display_tab.
 
+    "! Authorization object texts (TOBJT), keyed by object name.
+    DATA object_texts   TYPE text_map.
+    "! Activity texts (TACTT), keyed by ACTVT code.
+    DATA activity_texts TYPE text_map.
+
     METHODS build_rows.
+    METHODS load_texts.
+    "! Human-readable description of an authorization check, composed as
+    "! "<object text> — <activity text>" with any further authorization
+    "! field ids appended in parentheses. Falls back to raw object / code
+    "! whenever a text does not resolve.
+    METHODS describe
+      IMPORTING object         TYPE string
+                activity       TYPE string
+      RETURNING VALUE(text)    TYPE string.
     METHODS open_graph.
     METHODS set_headers
       IMPORTING columns TYPE REF TO cl_salv_columns.
@@ -154,9 +176,12 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD build_rows.
+    load_texts( ).
     LOOP AT result-checks INTO DATA(check).
       APPEND VALUE #(
         auth_object  = check-object
+        description  = describe( object   = check-object
+                                 activity = check-details )
         activity     = check-details
         check_type   = SWITCH #( check-type
                          WHEN zif_auth_scan_types=>check_types-statement       THEN 'AUTHORITY-CHECK'
@@ -170,6 +195,78 @@ CLASS lcl_app IMPLEMENTATION.
         call_path    = check-path
         provisional  = check-is_provisional ) TO rows.
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD load_texts.
+    " Authorization object texts — restricted to the objects actually present.
+    DATA objects TYPE SORTED TABLE OF tobjt-object WITH UNIQUE KEY table_line.
+    LOOP AT result-checks INTO DATA(check) WHERE object IS NOT INITIAL.
+      INSERT CONV tobjt-object( check-object ) INTO TABLE objects.
+    ENDLOOP.
+
+    IF objects IS NOT INITIAL.
+      SELECT object, langu, ttext FROM tobjt
+        FOR ALL ENTRIES IN @objects
+        WHERE object = @objects-table_line
+          AND ( langu = @sy-langu OR langu = 'E' )
+        INTO TABLE @DATA(object_rows).
+      " Logon language wins; English fills the gaps.
+      LOOP AT object_rows INTO DATA(object_row) WHERE langu = sy-langu.
+        INSERT VALUE #( key = object_row-object text = object_row-ttext ) INTO TABLE object_texts.
+      ENDLOOP.
+      LOOP AT object_rows INTO object_row WHERE langu = 'E'.
+        IF NOT line_exists( object_texts[ key = object_row-object ] ).
+          INSERT VALUE #( key = object_row-object text = object_row-ttext ) INTO TABLE object_texts.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+
+    " Activity texts — the activity master (TACTT) is small; load logon + English.
+    SELECT actvt, spras, ltext FROM tactt
+      WHERE spras = @sy-langu OR spras = 'E'
+      INTO TABLE @DATA(activity_rows).
+    LOOP AT activity_rows INTO DATA(activity_row) WHERE spras = sy-langu.
+      INSERT VALUE #( key = activity_row-actvt text = activity_row-ltext ) INTO TABLE activity_texts.
+    ENDLOOP.
+    LOOP AT activity_rows INTO activity_row WHERE spras = 'E'.
+      IF NOT line_exists( activity_texts[ key = activity_row-actvt ] ).
+        INSERT VALUE #( key = activity_row-actvt text = activity_row-ltext ) INTO TABLE activity_texts.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD describe.
+    IF object IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    DATA(object_text) = VALUE #( object_texts[ key = to_upper( object ) ]-text DEFAULT object ).
+
+    " Parse the "ID=VALUE, ID=VALUE, ..." activity string built by the detector.
+    DATA activity_code TYPE string.
+    DATA other_ids     TYPE string_table.
+    SPLIT activity AT `, ` INTO TABLE DATA(parts).
+    LOOP AT parts INTO DATA(part).
+      IF NOT part CS `=`.
+        CONTINUE.
+      ENDIF.
+      SPLIT part AT `=` INTO DATA(id) DATA(value).
+      IF id = 'ACTVT'.
+        activity_code = value.
+      ELSE.
+        APPEND id TO other_ids.
+      ENDIF.
+    ENDLOOP.
+
+    text = object_text.
+    IF activity_code IS NOT INITIAL.
+      DATA(activity_text) = VALUE #( activity_texts[ key = activity_code ]-text DEFAULT activity_code ).
+      text = |{ object_text } — { activity_text }|.
+    ENDIF.
+
+    IF other_ids IS NOT INITIAL.
+      text = |{ text } ({ concat_lines_of( table = other_ids sep = `, ` ) })|.
+    ENDIF.
   ENDMETHOD.
 
   METHOD open_graph.
@@ -200,6 +297,7 @@ CLASS lcl_app IMPLEMENTATION.
            header_tab TYPE STANDARD TABLE OF header WITH EMPTY KEY.
     DATA(headers) = VALUE header_tab(
       ( field = 'AUTH_OBJECT'  short = 'Object'   med = 'Auth. object'  long = 'Authorization object' )
+      ( field = 'DESCRIPTION'  short = 'Descr.'   med = 'Description'   long = 'Description' )
       ( field = 'ACTIVITY'     short = 'Activity' med = 'Activity'      long = 'Activity (ID/FIELD values)' )
       ( field = 'CHECK_TYPE'   short = 'Type'     med = 'Check type'    long = 'Check type' )
       ( field = 'OBJECT_KNOWN' short = 'Known'    med = 'Object known'  long = 'Object statically known' )
