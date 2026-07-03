@@ -59,6 +59,8 @@ This tool is complementary: it statically walks the reachable code and reports t
 
 ## Running it
 
+![Z_AUTH_SCAN in action: enter a transaction code, pick the scope, and get an ALV of the reachable authorization checks with a readable Description column](docs/media/zauth_scan_demo.gif)
+
 Start transaction **`ZAUTH_SCAN`** (or run report `Z_AUTH_SCAN` via `SA38`).
 
 On the selection screen:
