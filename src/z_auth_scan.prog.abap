@@ -284,6 +284,8 @@ CLASS lcl_app IMPLEMENTATION.
          |<html><body style="font-family:sans-serif">|
       && |<h3>Reachable call graph for { p_tcode }</h3>|
       && |<p><a href="{ url }" target="_blank">&#9654; Render this graph on kroki.io</a></p>|
+      && |<p>Or copy this link into a browser that can reach kroki.io:</p>|
+      && |<p><input readonly onclick="this.select()" style="width:100%;font-family:monospace" value="{ url }"></p>|
       && |<pre>{ source }</pre>|
       && |<hr><p style="color:#888888">recursive_abap_auth_check_reflection &middot; |
       && |<a href="https://github.com/Hochfrequenz/recursive_abap_auth_check_reflection" target="_blank">GitHub</a>|

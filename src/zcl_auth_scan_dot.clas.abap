@@ -99,17 +99,15 @@ CLASS zcl_auth_scan_dot IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD kroki_url.
-    " kroki expects: base64url( zlib-deflate( source ) )
+    " kroki expects: base64url( zlib-stream( source ) ), i.e. RFC 1950.
     DATA(raw) = cl_abap_codepage=>convert_to( dot ).
 
-    " cl_abap_gzip yields a GZIP stream (10-byte header + DEFLATE + 8-byte
-    " trailer). kroki needs a zlib stream, so strip the gzip framing to get the
-    " bare DEFLATE body, then wrap it as zlib: 0x789C + DEFLATE + adler32(source).
-    DATA gzip TYPE xstring.
+    " cl_abap_gzip=>compress_binary yields a bare DEFLATE stream (RFC 1951) —
+    " no header, no checksum. kroki needs a zlib stream (RFC 1950), so wrap the
+    " DEFLATE body as: 0x789C + DEFLATE + adler32(source).
+    DATA deflate TYPE xstring.
     cl_abap_gzip=>compress_binary( EXPORTING raw_in   = raw
-                                   IMPORTING gzip_out = gzip ).
-    DATA(deflate_length) = xstrlen( gzip ) - 18.
-    DATA(deflate) = gzip+10(deflate_length).
+                                   IMPORTING gzip_out = deflate ).
 
     DATA zlib_header TYPE x LENGTH 2 VALUE '789C'.
     DATA(header)   = CONV xstring( zlib_header ).
