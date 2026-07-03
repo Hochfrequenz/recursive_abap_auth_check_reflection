@@ -20,6 +20,10 @@ PARAMETERS p_depth TYPE i DEFAULT 100.
 SELECTION-SCREEN END OF LINE.
 
 SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(79) c_hint.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
 PARAMETERS p_std RADIOBUTTON GROUP scp DEFAULT 'X'.
 SELECTION-SCREEN COMMENT 3(40) c_std FOR FIELD p_std.
 SELECTION-SCREEN END OF LINE.
@@ -336,6 +340,7 @@ AT SELECTION-SCREEN ON p_tcode.
 INITIALIZATION.
   c_tcode = 'Transaction code'.
   c_depth = 'Max. recursion depth'.
+  c_hint  = 'Note: a high depth (e.g. 100) with SAP standard scope can take a while.'.
   c_std   = 'Descend into SAP standard'.
   c_cust  = 'Custom code only'.
   c_dot   = 'Show call graph (DOT / kroki.io)'.
