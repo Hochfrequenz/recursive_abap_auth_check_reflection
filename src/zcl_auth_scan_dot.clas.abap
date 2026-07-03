@@ -137,12 +137,14 @@ CLASS zcl_auth_scan_dot IMPLEMENTATION.
       offset = offset + 1.
     ENDWHILE.
 
-    DATA(value) = b * 65536 + a.
+    " adler32 = (b << 16) | a, stored big-endian. a and b are each < 65521, so
+    " pack their two bytes directly. (Computing b * 65536 first would overflow
+    " TYPE i whenever b >= 32768 — CX_SY_ARITHMETIC_OVERFLOW.)
     DATA bytes TYPE x LENGTH 4.
-    bytes+3(1) = value MOD 256.  value = value DIV 256.
-    bytes+2(1) = value MOD 256.  value = value DIV 256.
-    bytes+1(1) = value MOD 256.  value = value DIV 256.
-    bytes+0(1) = value MOD 256.
+    bytes+0(1) = b DIV 256.
+    bytes+1(1) = b MOD 256.
+    bytes+2(1) = a DIV 256.
+    bytes+3(1) = a MOD 256.
     result = bytes.
   ENDMETHOD.
 
