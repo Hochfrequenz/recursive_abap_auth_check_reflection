@@ -324,6 +324,15 @@ ENDCLASS.
 AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_tcode.
   lcl_app=>value_help( ).
 
+AT SELECTION-SCREEN ON p_tcode.
+  " Validate here (not in START-OF-SELECTION): a TYPE 'E' message keeps the
+  " user on the selection screen with the cursor on the field, instead of
+  " stranding them on an empty list.
+  SELECT SINGLE @abap_true FROM tstc WHERE tcode = @p_tcode INTO @DATA(tcode_exists).
+  IF tcode_exists = abap_false.
+    MESSAGE e001(zauth_scan) WITH p_tcode.
+  ENDIF.
+
 INITIALIZATION.
   c_tcode = 'Transaction code'.
   c_depth = 'Max. recursion depth'.
